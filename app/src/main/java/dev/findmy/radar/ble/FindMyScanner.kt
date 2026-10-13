@@ -8,11 +8,9 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.os.ParcelUuid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.UUID
 
 /**
  * Scans for BLE advertisements of Apple Offline Finding devices (AirTags etc.).
@@ -60,15 +58,12 @@ class FindMyScanner(context: Context) {
         val filter = ScanFilter.Builder()
             .setManufacturerData(FindMyDevice.APPLE_COMPANY_ID, byteArrayOf(OF_TYPE_BYTE))
             .build()
-        val overflowFilter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(UUID.fromString(OFFLINE_FINDING_SERVICE_UUID)))
-            .build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .build()
 
-        scanner.startScan(listOf(filter, overflowFilter), settings, callback)
+        scanner.startScan(listOf(filter), settings, callback)
         _isScanning.value = true
     }
 
@@ -91,8 +86,5 @@ class FindMyScanner(context: Context) {
 
     private companion object {
         const val OF_TYPE_BYTE: Byte = 0x12
-
-        // Some firmwares expose the Offline Finding service UUID in complete scans.
-        const val OFFLINE_FINDING_SERVICE_UUID = "7fd90001-aa26-4551-bb4d-8f27b5ba19f6"
     }
 }
