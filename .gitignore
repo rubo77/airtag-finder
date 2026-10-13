@@ -9,3 +9,12 @@
 .cxx
 local.properties
 app/build/
+
+# Backend: credentials, keys and caches must never be committed
+backend/account.json
+backend/ani_libs.bin
+backend/tags/
+backend/__pycache__/
+backend/last_report.json
+backend/.env
+/backend/.venv/
