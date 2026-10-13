@@ -131,10 +131,10 @@ private fun RadarCanvas(distanceM: Float?, angleSeed: Int, modifier: Modifier = 
 
         for (i in 1..RING_COUNT) {
             drawCircle(
-                color = ringColor,
+                color = ringColor.copy(alpha = (0.85f - i * 0.15f).coerceAtLeast(0.15f)),
                 radius = radius * i / RING_COUNT,
                 center = center,
-                style = Stroke(width = 2f, alpha = 0.8f - i * 0.12f),
+                style = Stroke(width = 2f),
             )
         }
 

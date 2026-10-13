@@ -12,5 +12,10 @@ fun parseKeyBytes(input: String): ByteArray? {
         return hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }
 
+    // Strict base64: correct alphabet and padded length, so random junk is rejected.
+    val isBase64 = cleaned.length % 4 == 0 &&
+        cleaned.all { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it in "+/=" }
+    if (!isBase64) return null
     return runCatching { Base64.getDecoder().decode(cleaned) }.getOrNull()
+        ?.takeIf { it.isNotEmpty() }
 }
