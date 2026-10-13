@@ -40,6 +40,7 @@ BATTERY_LEVEL = {0b00: "Full", 0b01: "Medium", 0b10: "Low", 0b11: "Very Low"}
 app = FastAPI(title="AirTag Finder Backend")
 
 _cache: dict[str, Any] = {"fetched_at": 0.0, "locations": []}
+_hist_cache: dict[str, Any] = {"fetched_at": 0.0, "history": []}
 _account: AppleAccount | None = None
 _tags: list[FindMyAccessory] | None = None
 
@@ -68,6 +69,21 @@ def get_tags() -> list[FindMyAccessory]:
     return _tags
 
 
+def _tag_name(tag: Any) -> str:
+    return tag.name or tag.identifier or tag.hashed_adv_key_b64[:12]
+
+
+def _fetch_with_session(fetch: Any) -> Any:
+    """Run a FindMy query; persist refreshed session state either way."""
+    acc = get_account()
+    try:
+        return fetch(acc)
+    except Exception as exc:  # auth/session errors surface as 502
+        raise HTTPException(502, f"FindMy-Abfrage fehlgeschlagen: {exc}") from exc
+    finally:
+        acc.to_json(str(ACCOUNT_PATH))
+
+
 def report_to_json(name: str, report: Any) -> dict[str, Any]:
     return {
         "name": name,
@@ -87,25 +103,37 @@ def locations() -> dict[str, Any]:
     if now - _cache["fetched_at"] < MIN_REFRESH_SECONDS:
         return _cache
 
-    acc = get_account()
     tags = get_tags()
-    try:
-        results = acc.fetch_location(tags)
-    except Exception as exc:  # auth/session errors surface as 502
-        raise HTTPException(502, f"FindMy-Abfrage fehlgeschlagen: {exc}") from exc
-    finally:
-        acc.to_json(str(ACCOUNT_PATH))  # persist refreshed session state
+    results = _fetch_with_session(lambda acc: acc.fetch_location(tags))
 
     out = []
     for tag in tags:
         report = results.get(tag)
-        name = tag.name or tag.identifier or tag.hashed_adv_key_b64[:12]
         if report is not None:
-            out.append(report_to_json(name, report))
+            out.append(report_to_json(_tag_name(tag), report))
 
     out.sort(key=lambda r: r["timestamp"], reverse=True)
     _cache.update({"fetched_at": now, "locations": out})
     return _cache
+
+
+@app.get("/api/history")
+def history() -> dict[str, Any]:
+    """All location reports per tag, oldest first — the trail for the map."""
+    now = time.time()
+    if now - _hist_cache["fetched_at"] < MIN_REFRESH_SECONDS:
+        return _hist_cache
+
+    tags = get_tags()
+    results = _fetch_with_session(lambda acc: acc.fetch_location_history(tags))
+
+    out = []
+    for tag, reports in results.items():
+        for report in sorted(reports):
+            out.append(report_to_json(_tag_name(tag), report))
+
+    _hist_cache.update({"fetched_at": now, "history": out})
+    return _hist_cache
 
 
 @app.get("/api/health")

@@ -1,6 +1,7 @@
 package dev.findmy.radar.util
 
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -15,9 +16,9 @@ data class LocationEntry(
     val battery: String,
 )
 
-/** Parses the JSON array returned by GET /api/locations. */
-fun parseLocations(json: String): List<LocationEntry> {
-    val arr = JSONArray(json)
+/** Parses the report list found under [key] in a backend response envelope. */
+fun parseEntries(json: String, key: String): List<LocationEntry> {
+    val arr: JSONArray = JSONObject(json).getJSONArray(key)
     return List(arr.length()) { i ->
         val o = arr.getJSONObject(i)
         LocationEntry(
@@ -32,10 +33,14 @@ fun parseLocations(json: String): List<LocationEntry> {
     }
 }
 
-/** Fetches GET {baseUrl}/api/locations and parses the response. Throws on errors. */
-fun fetchLocations(baseUrl: String, timeoutMs: Int = 10_000): List<LocationEntry> {
-    val url = URL(baseUrl.trimEnd('/') + "/api/locations")
-    val conn = url.openConnection() as HttpURLConnection
+/** Parses GET /api/locations: latest position per tag. */
+fun parseLocations(json: String): List<LocationEntry> = parseEntries(json, "locations")
+
+/** Parses GET /api/history: full report trail per tag, oldest first. */
+fun parseHistory(json: String): List<LocationEntry> = parseEntries(json, "history")
+
+private fun httpGet(url: String, timeoutMs: Int): String {
+    val conn = URL(url).openConnection() as HttpURLConnection
     try {
         conn.connectTimeout = timeoutMs
         conn.readTimeout = timeoutMs
@@ -43,10 +48,18 @@ fun fetchLocations(baseUrl: String, timeoutMs: Int = 10_000): List<LocationEntry
         if (conn.responseCode != 200) {
             throw LocationFetchException("HTTP ${conn.responseCode}")
         }
-        return parseLocations(conn.inputStream.bufferedReader().readText())
+        return conn.inputStream.bufferedReader().readText()
     } finally {
         conn.disconnect()
     }
 }
+
+/** Fetches GET {baseUrl}/api/locations and parses the response. Throws on errors. */
+fun fetchLocations(baseUrl: String, timeoutMs: Int = 10_000): List<LocationEntry> =
+    parseLocations(httpGet(baseUrl.trimEnd('/') + "/api/locations", timeoutMs))
+
+/** Fetches GET {baseUrl}/api/history and parses the response. Throws on errors. */
+fun fetchHistory(baseUrl: String, timeoutMs: Int = 10_000): List<LocationEntry> =
+    parseHistory(httpGet(baseUrl.trimEnd('/') + "/api/history", timeoutMs))
 
 class LocationFetchException(message: String) : Exception(message)

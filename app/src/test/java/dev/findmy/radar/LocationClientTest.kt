@@ -1,6 +1,7 @@
 package dev.findmy.radar
 
 import dev.findmy.radar.util.fetchLocations
+import dev.findmy.radar.util.parseHistory
 import dev.findmy.radar.util.parseLocations
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -11,9 +12,20 @@ import kotlin.concurrent.thread
 class LocationClientTest {
 
     private val sampleJson = """
+        {"fetched_at": 1760289000.0, "locations":
         [{"name":"Schluessel","latitude":52.5200,"longitude":13.4050,
           "timestamp":"2026-10-13T12:34:56+02:00","confidence":3,
-          "horizontal_accuracy":17,"status":16,"battery":"Full"}]
+          "horizontal_accuracy":17,"status":16,"battery":"Full"}]}
+    """.trimIndent()
+
+    private val sampleHistoryJson = """
+        {"fetched_at": 1760289000.0, "history":
+        [{"name":"Schluessel","latitude":52.5100,"longitude":13.4000,
+          "timestamp":"2026-10-13T10:00:00+02:00","confidence":3,
+          "horizontal_accuracy":30,"status":16,"battery":"Full"},
+         {"name":"Schluessel","latitude":52.5200,"longitude":13.4050,
+          "timestamp":"2026-10-13T12:34:56+02:00","confidence":3,
+          "horizontal_accuracy":17,"status":16,"battery":"Full"}]}
     """.trimIndent()
 
     @Test
@@ -31,7 +43,19 @@ class LocationClientTest {
 
     @Test
     fun `parses empty list`() {
-        assertEquals(emptyList<Any>(), parseLocations("[]"))
+        assertEquals(
+            emptyList<Any>(),
+            parseLocations("""{"fetched_at": 0.0, "locations": []}"""),
+        )
+    }
+
+    @Test
+    fun `parses history trail in chronological order`() {
+        val trail = parseHistory(sampleHistoryJson)
+        assertEquals(2, trail.size)
+        assertEquals(52.51, trail[0].latitude, 0.0001)
+        assertEquals(52.52, trail[1].latitude, 0.0001)
+        assertEquals("2026-10-13T10:00:00+02:00", trail[0].timestamp)
     }
 
     @Test

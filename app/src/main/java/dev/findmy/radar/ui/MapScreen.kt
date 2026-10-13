@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.findmy.radar.util.LocationEntry
+import dev.findmy.radar.util.fetchHistory
 import dev.findmy.radar.util.fetchLocations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -34,6 +35,8 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
+import kotlin.math.abs
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -47,6 +50,7 @@ fun MapScreen() {
 
     var backendUrl by remember { mutableStateOf(prefs.getString("backend_url", "") ?: "") }
     var locations by remember { mutableStateOf<List<LocationEntry>>(emptyList()) }
+    var history by remember { mutableStateOf<List<LocationEntry>>(emptyList()) }
     var statusText by remember { mutableStateOf("Backend-URL eintragen, z. B. http://192.168.1.10:8000") }
     var refreshTick by remember { mutableStateOf(0) }
 
@@ -56,14 +60,17 @@ fun MapScreen() {
         while (true) {
             statusText = "Lade Positionen…"
             val result = runCatching {
-                withContext(Dispatchers.IO) { fetchLocations(backendUrl) }
+                withContext(Dispatchers.IO) {
+                    fetchLocations(backendUrl) to fetchHistory(backendUrl)
+                }
             }
-            result.onSuccess {
-                locations = it
-                statusText = if (it.isEmpty()) {
+            result.onSuccess { (locs, hist) ->
+                locations = locs
+                history = hist
+                statusText = if (locs.isEmpty()) {
                     "Keine Positionsreports vorhanden"
                 } else {
-                    "Aktualisiert · ${it.size} Tag(s)"
+                    "Aktualisiert · ${locs.size} Tag(s) · ${hist.size} Trail-Punkte"
                 }
             }.onFailure {
                 statusText = "Fehler: ${it.message}"
@@ -90,7 +97,7 @@ fun MapScreen() {
         Text(statusText, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         Spacer(Modifier.height(8.dp))
 
-        OsmMap(locations, modifier = Modifier.weight(1f).fillMaxWidth())
+        OsmMap(locations, history, modifier = Modifier.weight(1f).fillMaxWidth())
 
         locations.forEach { loc ->
             Text(
@@ -102,8 +109,20 @@ fun MapScreen() {
     }
 }
 
+/** Stable per-tag trail colors, picked from the palette by name hash. */
+private val TRAIL_COLORS = intArrayOf(
+    0xFF4FC3F7.toInt(), 0xFF69F0AE.toInt(), 0xFFFFD54F.toInt(),
+    0xFFFF8A65.toInt(), 0xFFBA68C8.toInt(), 0xFFFFF176.toInt(),
+)
+
+private fun trailColor(name: String) = TRAIL_COLORS[abs(name.hashCode()) % TRAIL_COLORS.size]
+
 @Composable
-private fun OsmMap(locations: List<LocationEntry>, modifier: Modifier = Modifier) {
+private fun OsmMap(
+    locations: List<LocationEntry>,
+    history: List<LocationEntry>,
+    modifier: Modifier = Modifier,
+) {
     AndroidView(
         factory = { ctx ->
             val p = ctx.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE)
@@ -117,7 +136,21 @@ private fun OsmMap(locations: List<LocationEntry>, modifier: Modifier = Modifier
             }
         },
         update = { map ->
-            map.overlays.removeIf { it is Marker }
+            map.overlays.removeIf { it is Marker || it is Polyline }
+
+            // Position trail per tag, oldest -> newest.
+            history.groupBy { it.name }.forEach { (name, entries) ->
+                if (entries.size >= 2) {
+                    map.overlays.add(
+                        Polyline(map).apply {
+                            setPoints(entries.map { GeoPoint(it.latitude, it.longitude) })
+                            outlinePaint.color = trailColor(name)
+                            outlinePaint.strokeWidth = 6f
+                        },
+                    )
+                }
+            }
+
             locations.forEach { loc ->
                 map.overlays.add(
                     Marker(map).apply {
