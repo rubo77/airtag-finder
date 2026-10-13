@@ -32,6 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dev.findmy.radar.ble.FindMyDevice
 import dev.findmy.radar.ble.FindMyScanner
+import dev.findmy.radar.util.IdLog
 import dev.findmy.radar.ui.DeviceListScreen
 import dev.findmy.radar.ui.MapScreen
 import dev.findmy.radar.ui.RadarScreen
@@ -79,6 +80,8 @@ class MainActivity : ComponentActivity() {
             mutableStateOf(getPreferences(MODE_PRIVATE).getString(PREF_KEY_FILTER, "") ?: "")
         }
         var deviceNames by remember { mutableStateOf(loadDeviceNames()) }
+        val idLog = remember { IdLog.decode(getPreferences(MODE_PRIVATE).getString(PREF_ID_LOG, "") ?: "") }
+        var idLogSize by remember { mutableStateOf(idLog.entries.size) }
 
         val permissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
@@ -102,6 +105,26 @@ class MainActivity : ComponentActivity() {
 
         val devices by scanner.devices.collectAsState()
         val isScanning by scanner.isScanning.collectAsState()
+
+        // Log every observed identity and persist it (SharedPreferences.apply is async).
+        LaunchedEffect(devices) {
+            val now = System.currentTimeMillis()
+            devices.values.forEach { idLog.observe(it.nameKey, it.mac, now) }
+            idLog.prune(now, deviceNames, UNNAMED_TTL_MS, NAMED_TTL_MS)
+            idLogSize = idLog.entries.size
+            getPreferences(MODE_PRIVATE).edit().putString(PREF_ID_LOG, idLog.encode()).apply()
+        }
+
+        // For each unnamed live device: did a named identity just rotate into it?
+        val now = System.currentTimeMillis()
+        val liveKeys = devices.values.mapTo(HashSet()) { it.nameKey }
+        val suggestions = devices.values
+            .filter { deviceNames[it.nameKey] == null }
+            .mapNotNull { dev ->
+                IdLog.findLikelyPredecessor(idLog, deviceNames, dev.nameKey, liveKeys, now)
+                    ?.let { dev.nameKey to it }
+            }
+            .toMap()
 
         // Resolve the pinned target against the latest advertisements: by MAC, or by
         // advertisement-key prefix (survives the nearby<->separated state switch).
@@ -146,6 +169,9 @@ class MainActivity : ComponentActivity() {
                         bluetoothOn = bluetoothOn,
                         keyFilterHex = keyFilterHex,
                         deviceNames = deviceNames,
+                        suggestions = suggestions,
+                        existingNames = deviceNames.values.toSortedSet().toList(),
+                        idLogSize = idLogSize,
                         onKeyFilterChange = { hex ->
                             keyFilterHex = hex
                             getPreferences(MODE_PRIVATE).edit()
@@ -191,6 +217,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val PREF_KEY_FILTER = "own_adv_key_hex"
         private const val PREF_NAME_PREFIX = "name:"
+        private const val PREF_ID_LOG = "id_log"
+        private const val UNNAMED_TTL_MS = 24L * 3600_000
+        private const val NAMED_TTL_MS = 30L * 24 * 3600_000
 
         fun requiredPermissions(): Array<String> =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

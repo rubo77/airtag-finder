@@ -46,6 +46,9 @@ fun DeviceListScreen(
     bluetoothOn: Boolean,
     keyFilterHex: String,
     deviceNames: Map<String, String>,
+    suggestions: Map<String, String>,
+    existingNames: List<String>,
+    idLogSize: Int,
     onKeyFilterChange: (String) -> Unit,
     onRenameDevice: (FindMyDevice, String?) -> Unit,
     onRequestPermissions: () -> Unit,
@@ -64,6 +67,11 @@ fun DeviceListScreen(
             if (isScanning) "Scanne nach FindMy-Geräten…" else "Scanner gestoppt",
             style = MaterialTheme.typography.bodyMedium,
             color = if (isScanning) Color(0xFF69F0AE) else Color.Gray,
+        )
+        Text(
+            "Bekannte IDs im Log: $idLogSize",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.Gray,
         )
 
         Spacer(Modifier.height(12.dp))
@@ -113,9 +121,11 @@ fun DeviceListScreen(
                 DeviceCard(
                     device,
                     customName = deviceNames[device.nameKey],
+                    suggestion = suggestions[device.nameKey],
                     isMine = keyFilter != null && device.matchesAdvKey(keyFilter),
                     onPickTarget = { onPickTarget(device) },
                     onRename = { renaming = device },
+                    onAcceptSuggestion = { name -> onRenameDevice(device, name) },
                 )
             }
         }
@@ -125,6 +135,7 @@ fun DeviceListScreen(
         RenameDialog(
             device = device,
             currentName = deviceNames[device.nameKey],
+            existingNames = existingNames,
             onDismiss = { renaming = null },
             onSave = { name ->
                 onRenameDevice(device, name)
@@ -151,6 +162,7 @@ private fun PermissionCard(text: String, buttonText: String, onClick: () -> Unit
 private fun RenameDialog(
     device: FindMyDevice,
     currentName: String?,
+    existingNames: List<String>,
     onDismiss: () -> Unit,
     onSave: (String?) -> Unit,
 ) {
@@ -166,6 +178,19 @@ private fun RenameDialog(
                     label = { Text("Name") },
                     singleLine = true,
                 )
+                if (existingNames.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Bestehendem Gerät zuordnen:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                    )
+                    Row {
+                        existingNames.take(4).forEach { name ->
+                            TextButton(onClick = { text = name }) { Text(name) }
+                        }
+                    }
+                }
                 Text(
                     "Bleibt gespeichert, bis der Advertisement-Key rotiert (~15 Min). " +
                         "Identität: ${device.nameKey}",
@@ -187,9 +212,11 @@ private fun RenameDialog(
 private fun DeviceCard(
     device: FindMyDevice,
     customName: String?,
+    suggestion: String?,
     isMine: Boolean,
     onPickTarget: () -> Unit,
     onRename: () -> Unit,
+    onAcceptSuggestion: (String) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
@@ -243,6 +270,20 @@ private fun DeviceCard(
                 }
                 IconButton(onClick = onRename) {
                     Icon(Icons.Default.Edit, contentDescription = "Umbenennen")
+                }
+            }
+            if (customName == null && suggestion != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Vermutlich „$suggestion“? (Key rotiert)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFFD54F),
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { onAcceptSuggestion(suggestion) }) {
+                        Text("Zuordnen")
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))

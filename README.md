@@ -9,6 +9,8 @@ Die App scannt BLE-Advertisements vom Typ *Offline Finding* (Apple Company-ID `0
 - **Geräteliste**: alle gefundenen AirTags, AirPods, iPhones und FindMy-Zubehör mit MAC, Advertisement-Key-Präfix, RSSI, Batteriesymbol und Entfernungsschätzung
 - **Radar**: große Entfernungsanzeige, Sweep-Animation, Pieptöne die schneller werden je näher du kommst, Vibration unter ~1 m
 - **Eigen-Filter**: `adv_key_b64` deines AirTags (z. B. aus [FindMy.py](https://github.com/malmeloo/FindMy.py)) eintragen → dein Gerät wird markiert und die Liste gefiltert
+- **Eigene Namen**: jedes gefundene Gerät lässt sich benennen (Stift-Icon), Namen bleiben gespeichert
+- **Rotations-Erkennung**: alle gesehenen IDs werden geloggt; taucht nach dem Verschwinden eines benannten Geräts eine neue ID auf, schlägt die App die Zuordnung zum wahrscheinlichen Vorgänger vor (manuell bestätigbar)
 - **Zustände**: unterscheidet *separated* (voller 28-Byte-Key wird gesendet) und *nearby* (nur 6 Key-Bytes)
 - **Karten-Tab**: zeigt die letzte bekannte Position aus Apples Find-My-Netzwerk auf einer OpenStreetMap-Karte — via dem mitgelieferten [`backend/`](backend/) (FindMy.py + FastAPI)
 - **Permissions** korrekt je Android-Version: „Geräte in der Nähe" ab Android 12, Standort-Berechtigung auf älteren Versionen
