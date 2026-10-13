@@ -13,9 +13,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,12 +35,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.findmy.radar.ble.FindMyDevice
 import dev.findmy.radar.crypto.AccessoryIdentity
 import dev.findmy.radar.util.parseKeyBytes
 import java.util.Locale
+
+private enum class ListFilter(val label: String) {
+    ALL("Alle"),
+    AIRTAGS("AirTags"),
+    NAMED("Benannt"),
+    UNNAMED("Unbenannt"),
+}
 
 @Composable
 fun DeviceListScreen(
@@ -58,6 +68,7 @@ fun DeviceListScreen(
     onDeleteAccessory: (AccessoryIdentity) -> Unit,
     onKeyFilterChange: (String) -> Unit,
     onRenameDevice: (FindMyDevice, String?) -> Unit,
+    onBuildExport: () -> String,
     onRequestPermissions: () -> Unit,
     onEnableBluetooth: () -> Unit,
     onRefreshBluetooth: () -> Unit,
@@ -65,6 +76,8 @@ fun DeviceListScreen(
 ) {
     var renaming by remember { mutableStateOf<FindMyDevice?>(null) }
     var managingTags by remember { mutableStateOf(false) }
+    var chipFilter by remember { mutableStateOf(ListFilter.ALL) }
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -78,6 +91,17 @@ fun DeviceListScreen(
             )
             TextButton(onClick = { managingTags = true }) {
                 Text("Eigene Tags (${accessories.size})")
+            }
+            IconButton(onClick = {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(android.content.Intent.EXTRA_TEXT, onBuildExport())
+                }
+                context.startActivity(
+                    android.content.Intent.createChooser(send, "ID-Log exportieren"),
+                )
+            }) {
+                Icon(Icons.Default.Share, contentDescription = "Log exportieren")
             }
         }
         Text(
@@ -128,9 +152,27 @@ fun DeviceListScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ListFilter.entries.forEach { f ->
+                FilterChip(
+                    selected = chipFilter == f,
+                    onClick = { chipFilter = f },
+                    label = { Text(f.label) },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
         val keyFilter = remember(keyFilterHex) { parseKeyBytes(keyFilterHex) }
         val filtered = devices.filter { dev ->
-            keyFilterHex.isBlank() || keyFilter == null || dev.matchesAdvKey(keyFilter)
+            (keyFilterHex.isBlank() || keyFilter == null || dev.matchesAdvKey(keyFilter)) &&
+                when (chipFilter) {
+                    ListFilter.ALL -> true
+                    ListFilter.AIRTAGS -> dev.isAirTag
+                    ListFilter.NAMED -> deviceNames[dev.nameKey] != null
+                    ListFilter.UNNAMED -> deviceNames[dev.nameKey] == null
+                }
         }
 
         if (filtered.isEmpty()) {

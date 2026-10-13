@@ -21,6 +21,9 @@ sealed class FindMyDevice {
         advKeyBytes.size >= prefix.size &&
             advKeyBytes.copyOf(prefix.size).contentEquals(prefix)
 
+    val isAirTag: Boolean
+        get() = (status shr 4) and 0b11 == 0b01
+
     val deviceType: String
         get() = when ((status shr 4) and 0b11) {
             0b00 -> "Apple-Gerät"

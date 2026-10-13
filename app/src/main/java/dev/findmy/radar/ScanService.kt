@@ -9,12 +9,25 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import dev.findmy.radar.ble.ScanController
+import dev.findmy.radar.util.Notifier
+import dev.findmy.radar.util.PresenceWatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Keeps the BLE scan running while the screen is off, via a foreground-service
- * notification with a stop action.
+ * notification with a stop action. Also watches for named devices appearing
+ * or disappearing and raises notifications for those transitions.
  */
 class ScanService : Service() {
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val watcher = PresenceWatcher()
+    private var watcherJob: kotlinx.coroutines.Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -29,10 +42,12 @@ class ScanService : Service() {
         ScanController.init(this)
         ScanController.backgroundScan = true
         ScanController.scanner.start()
+        startWatcher()
         return START_STICKY
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         stopScanning()
         super.onDestroy()
     }
@@ -42,6 +57,28 @@ class ScanService : Service() {
     private fun stopScanning() {
         ScanController.backgroundScan = false
         ScanController.scannerOrNull?.stop()
+    }
+
+    /** Periodically compare visible devices against the stored nicknames. */
+    private fun startWatcher() {
+        if (watcherJob?.isActive == true) return
+        val prefs = getSharedPreferences("findmy_prefs", MODE_PRIVATE)
+        watcherJob = serviceScope.launch {
+            while (true) {
+                val now = System.currentTimeMillis()
+                val names = prefs.all
+                    .filterKeys { it.startsWith("name:") }
+                    .mapKeys { it.key.removePrefix("name:") }
+                    .mapValues { it.value.toString() }
+                val present = ScanController.scanner.devices.value.values
+                    .mapNotNull { names[it.nameKey] }
+                    .toSet()
+                watcher.update(present, now).forEach { (name, appeared) ->
+                    Notifier.notifyDeviceEvent(this@ScanService, name, appeared)
+                }
+                delay(WATCH_INTERVAL_MS)
+            }
+        }
     }
 
     private fun ensureChannel() {
@@ -84,5 +121,6 @@ class ScanService : Service() {
         const val ACTION_STOP = "dev.findmy.radar.action.STOP_SCAN"
         private const val CHANNEL_ID = "scan"
         private const val NOTIFICATION_ID = 1
+        private const val WATCH_INTERVAL_MS = 30_000L
     }
 }

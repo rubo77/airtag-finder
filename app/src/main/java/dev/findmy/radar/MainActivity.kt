@@ -35,6 +35,8 @@ import dev.findmy.radar.ble.FindMyScanner
 import dev.findmy.radar.ble.ScanController
 import dev.findmy.radar.crypto.AccessoryIdentity
 import dev.findmy.radar.util.IdLog
+import dev.findmy.radar.util.Notifier
+import dev.findmy.radar.util.PresenceWatcher
 import dev.findmy.radar.ui.DeviceListScreen
 import dev.findmy.radar.ui.MapScreen
 import dev.findmy.radar.ui.RadarScreen
@@ -85,7 +87,7 @@ class MainActivity : ComponentActivity() {
         var backgroundScan by remember { mutableStateOf(ScanController.backgroundScan) }
         var target by remember { mutableStateOf<FindMyDevice?>(null) }
         var keyFilterHex by remember {
-            mutableStateOf(getPreferences(MODE_PRIVATE).getString(PREF_KEY_FILTER, "") ?: "")
+            mutableStateOf(appPrefs().getString(PREF_KEY_FILTER, "") ?: "")
         }
         var deviceNames by remember { mutableStateOf(loadDeviceNames()) }
         var accessories by remember { mutableStateOf(loadAccessories()) }
@@ -93,8 +95,9 @@ class MainActivity : ComponentActivity() {
         var derivedNames by remember { mutableStateOf(mapOf<String, String>()) }
         // nameKey -> last rolling-key match attempt, throttled so EC work stays rare.
         val matchAttempts = remember { mutableMapOf<String, Long>() }
-        val idLog = remember { IdLog.decode(getPreferences(MODE_PRIVATE).getString(PREF_ID_LOG, "") ?: "") }
+        val idLog = remember { IdLog.decode(appPrefs().getString(PREF_ID_LOG, "") ?: "") }
         var idLogSize by remember { mutableStateOf(idLog.entries.size) }
+        val watcher = remember { PresenceWatcher() }
 
         val permissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
@@ -128,7 +131,16 @@ class MainActivity : ComponentActivity() {
             devices.values.forEach { idLog.observe(it.nameKey, it.mac, now) }
             idLog.prune(now, deviceNames, UNNAMED_TTL_MS, NAMED_TTL_MS)
             idLogSize = idLog.entries.size
-            getPreferences(MODE_PRIVATE).edit().putString(PREF_ID_LOG, idLog.encode()).apply()
+            appPrefs().edit().putString(PREF_ID_LOG, idLog.encode()).apply()
+
+            // Notify on appear/disappear of named devices (prune() above makes
+            // silent devices leave the map, which is what the watcher detects).
+            val namedNow = devices.values
+                .mapNotNull { (derivedNames + deviceNames)[it.nameKey] }
+                .toSet()
+            watcher.update(namedNow, now).forEach { (n, appeared) ->
+                Notifier.notifyDeviceEvent(this@MainActivity, n, appeared)
+            }
         }
 
         // Nicknames override derived names; derived names never rotate away.
@@ -265,8 +277,18 @@ class MainActivity : ComponentActivity() {
                         },
                         onKeyFilterChange = { hex ->
                             keyFilterHex = hex
-                            getPreferences(MODE_PRIVATE).edit()
+                            appPrefs().edit()
                                 .putString(PREF_KEY_FILTER, hex).apply()
+                        },
+                        onBuildExport = {
+                            JSONObject()
+                                .put(
+                                    "exported_at",
+                                    java.time.Instant.now().toString(),
+                                )
+                                .put("device_names", JSONObject(deviceNames))
+                                .put("id_log", JSONObject(idLog.encode()))
+                                .toString(2)
                         },
                         onRenameDevice = { device, name ->
                             saveDeviceName(device.nameKey, name)
@@ -291,15 +313,30 @@ class MainActivity : ComponentActivity() {
     private fun isGranted(permission: String) =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
+    /**
+     * Shared "findmy_prefs" store (same file MapScreen uses) so ScanService can
+     * read names too. One-time migration from the old activity-private prefs.
+     */
+    private fun appPrefs() = getSharedPreferences(PREFS_FILE, MODE_PRIVATE).also { p ->
+        if (p.all.isEmpty()) {
+            val legacy = getPreferences(MODE_PRIVATE)
+            if (legacy.all.isNotEmpty()) {
+                val e = p.edit()
+                legacy.all.forEach { (k, v) -> if (v is String) e.putString(k, v) }
+                e.apply()
+            }
+        }
+    }
+
     /** All stored device names, keyed by the device's 6-byte key-prefix hex. */
     private fun loadDeviceNames(): Map<String, String> =
-        getPreferences(MODE_PRIVATE).all
+        appPrefs().all
             .filterKeys { it.startsWith(PREF_NAME_PREFIX) }
             .mapKeys { it.key.removePrefix(PREF_NAME_PREFIX) }
             .mapValues { it.value.toString() }
 
     private fun saveDeviceName(nameKey: String, name: String?) {
-        getPreferences(MODE_PRIVATE).edit().apply {
+        appPrefs().edit().apply {
             if (name == null) remove(PREF_NAME_PREFIX + nameKey)
             else putString(PREF_NAME_PREFIX + nameKey, name)
         }.apply()
@@ -308,7 +345,7 @@ class MainActivity : ComponentActivity() {
     /** Imported FindMy accessories whose rolling keys identify tags permanently. */
     private fun loadAccessories(): List<AccessoryIdentity> =
         runCatching {
-            val raw = getPreferences(MODE_PRIVATE).getString(PREF_ACCESSORIES, "[]") ?: "[]"
+            val raw = appPrefs().getString(PREF_ACCESSORIES, "[]") ?: "[]"
             val arr = JSONArray(raw)
             List(arr.length()) { AccessoryIdentity.fromJson(arr.getJSONObject(it)) }
         }.getOrDefault(emptyList())
@@ -316,10 +353,11 @@ class MainActivity : ComponentActivity() {
     private fun saveAccessories(list: List<AccessoryIdentity>) {
         val arr = JSONArray()
         list.forEach { arr.put(it.toJson()) }
-        getPreferences(MODE_PRIVATE).edit().putString(PREF_ACCESSORIES, arr.toString()).apply()
+        appPrefs().edit().putString(PREF_ACCESSORIES, arr.toString()).apply()
     }
 
     companion object {
+        private const val PREFS_FILE = "findmy_prefs"
         private const val PREF_KEY_FILTER = "own_adv_key_hex"
         private const val PREF_NAME_PREFIX = "name:"
         private const val PREF_ID_LOG = "id_log"
