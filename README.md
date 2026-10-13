@@ -53,9 +53,15 @@ alle 60 s ab und pinnt die Positionen auf die Karte.
 ```bash
 cd backend && pip install -r requirements.txt
 python login.py          # einmalig: Apple-ID + 2FA
-cp dein_airtag.json tags/
+cp dein_airtag.json tags/ # siehe backend/README.md: Schlüssel-Export von macOS
 uvicorn server:app --host 0.0.0.0 --port 8000
 ```
+
+Das Backend selbst läuft komplett unter Linux — **nur für den einmaligen
+Key-Export** brauchst du Zugriff auf einen Mac, der deine Tags in „Wo ist?"
+sieht: die Records liegen unter
+`~/Library/com.apple.icloud.searchpartyd/OwnedBeacons/` — Details stehen in
+[`backend/README.md`](backend/README.md).
 
 ## Einschränkungen
 
