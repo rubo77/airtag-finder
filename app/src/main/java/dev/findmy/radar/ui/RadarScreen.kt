@@ -50,6 +50,7 @@ private const val RING_COUNT = 4
 @Composable
 fun RadarScreen(
     device: FindMyDevice?,
+    displayName: String? = null,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -86,7 +87,7 @@ fun RadarScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            device?.let { "${it.deviceType} · ${it.mac}" } ?: "Signal verloren",
+            device?.let { "${displayName ?: it.deviceType} · ${it.mac}" } ?: "Signal verloren",
             style = MaterialTheme.typography.titleMedium,
             fontFamily = FontFamily.Monospace,
         )

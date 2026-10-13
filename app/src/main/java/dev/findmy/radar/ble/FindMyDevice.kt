@@ -45,6 +45,14 @@ sealed class FindMyDevice {
     val keyHexShort: String
         get() = advKeyBytes.joinToString("") { "%02x".format(it) }.take(16)
 
+    /**
+     * Stable identity within one key period: the first 6 key bytes are broadcast in
+     * BOTH nearby and separated state, so this survives the state switch. It does
+     * NOT survive advertisement-key rotation (~every 15 min on real AirTags).
+     */
+    val nameKey: String
+        get() = advKeyBytes.copyOf(6).joinToString("") { "%02x".format(it) }
+
     /** AirTag in "separated" state: broadcasts the full 28-byte advertisement key. */
     data class Separated(
         override val mac: String,

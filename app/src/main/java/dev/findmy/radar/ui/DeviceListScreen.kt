@@ -11,15 +11,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,12 +45,15 @@ fun DeviceListScreen(
     hasPermissions: Boolean,
     bluetoothOn: Boolean,
     keyFilterHex: String,
+    deviceNames: Map<String, String>,
     onKeyFilterChange: (String) -> Unit,
+    onRenameDevice: (FindMyDevice, String?) -> Unit,
     onRequestPermissions: () -> Unit,
     onEnableBluetooth: () -> Unit,
     onRefreshBluetooth: () -> Unit,
     onPickTarget: (FindMyDevice) -> Unit,
 ) {
+    var renaming by remember { mutableStateOf<FindMyDevice?>(null) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -100,11 +112,25 @@ fun DeviceListScreen(
             items(filtered, key = { it.mac }) { device ->
                 DeviceCard(
                     device,
+                    customName = deviceNames[device.nameKey],
                     isMine = keyFilter != null && device.matchesAdvKey(keyFilter),
                     onPickTarget = { onPickTarget(device) },
+                    onRename = { renaming = device },
                 )
             }
         }
+    }
+
+    renaming?.let { device ->
+        RenameDialog(
+            device = device,
+            currentName = deviceNames[device.nameKey],
+            onDismiss = { renaming = null },
+            onSave = { name ->
+                onRenameDevice(device, name)
+                renaming = null
+            },
+        )
     }
 }
 
@@ -122,13 +148,58 @@ private fun PermissionCard(text: String, buttonText: String, onClick: () -> Unit
 }
 
 @Composable
-private fun DeviceCard(device: FindMyDevice, isMine: Boolean, onPickTarget: () -> Unit) {
+private fun RenameDialog(
+    device: FindMyDevice,
+    currentName: String?,
+    onDismiss: () -> Unit,
+    onSave: (String?) -> Unit,
+) {
+    var text by remember { mutableStateOf(currentName ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Gerät benennen") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                )
+                Text(
+                    "Bleibt gespeichert, bis der Advertisement-Key rotiert (~15 Min). " +
+                        "Identität: ${device.nameKey}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(text.ifBlank { null }) }) { Text("Speichern") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Abbrechen") }
+        },
+    )
+}
+
+@Composable
+private fun DeviceCard(
+    device: FindMyDevice,
+    customName: String?,
+    isMine: Boolean,
+    onPickTarget: () -> Unit,
+    onRename: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(device.deviceType, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            customName ?: device.deviceType,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                         if (isMine) {
                             Spacer(Modifier.width(8.dp))
                             Surface(
@@ -150,6 +221,13 @@ private fun DeviceCard(device: FindMyDevice, isMine: Boolean, onPickTarget: () -
                             color = Color.Gray,
                         )
                     }
+                    if (customName != null) {
+                        Text(
+                            device.deviceType,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray,
+                        )
+                    }
                     Text(device.mac, fontFamily = FontFamily.Monospace, color = Color.Gray)
                     Text(
                         "Key: ${device.keyHexShort}…",
@@ -162,6 +240,9 @@ private fun DeviceCard(device: FindMyDevice, isMine: Boolean, onPickTarget: () -
                             String.format(Locale.GERMANY, "%.1f m", device.estimatedDistanceMeters),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+                IconButton(onClick = onRename) {
+                    Icon(Icons.Default.Edit, contentDescription = "Umbenennen")
                 }
             }
             Spacer(Modifier.height(8.dp))

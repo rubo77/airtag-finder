@@ -93,6 +93,25 @@ class FindMyDeviceTest {
     }
 
     @Test
+    fun `nameKey is identical for nearby and separated state of same key period`() {
+        // Same key period: first 6 key bytes are 0x01..0x06 in both states.
+        val pub = (1..28).map { it.toByte() }.toByteArray()
+        val sepPayload = byteArrayOf(0x10) + pub.copyOfRange(6, 28) + byteArrayOf(0x00, 0x00)
+        val separated = FindMyDevice.parse(
+            "C1:02:03:04:05:06", ofAdvertisement(sepPayload), -50, 0,
+        )!!
+
+        val nearPayload = byteArrayOf(0x10, 0x00)
+        val nearby = FindMyDevice.parse(
+            "C1:02:03:04:05:06", ofAdvertisement(nearPayload), -50, 0,
+        )!!
+
+        assertEquals("010203040506", separated.nameKey)
+        assertEquals(separated.nameKey, nearby.nameKey)
+        assertEquals(12, separated.nameKey.length)
+    }
+
+    @Test
     fun `distance estimate grows with weaker rssi`() {
         val payload = byteArrayOf(0x00, 0x00)
         val near = FindMyDevice.parse("C0:01:02:03:04:05", ofAdvertisement(payload), -45, 0)!!

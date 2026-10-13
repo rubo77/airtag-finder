@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         var keyFilterHex by remember {
             mutableStateOf(getPreferences(MODE_PRIVATE).getString(PREF_KEY_FILTER, "") ?: "")
         }
+        var deviceNames by remember { mutableStateOf(loadDeviceNames()) }
 
         val permissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
@@ -132,6 +133,7 @@ class MainActivity : ComponentActivity() {
                 if (target != null) {
                     RadarScreen(
                         device = liveTarget,
+                        displayName = liveTarget?.let { deviceNames[it.nameKey] },
                         onBack = { target = null },
                     )
                 } else if (tab == 1) {
@@ -143,10 +145,15 @@ class MainActivity : ComponentActivity() {
                         hasPermissions = hasPermissions,
                         bluetoothOn = bluetoothOn,
                         keyFilterHex = keyFilterHex,
+                        deviceNames = deviceNames,
                         onKeyFilterChange = { hex ->
                             keyFilterHex = hex
                             getPreferences(MODE_PRIVATE).edit()
                                 .putString(PREF_KEY_FILTER, hex).apply()
+                        },
+                        onRenameDevice = { device, name ->
+                            saveDeviceName(device.nameKey, name)
+                            deviceNames = loadDeviceNames()
                         },
                         onRequestPermissions = {
                             permissionLauncher.launch(requiredPermissions())
@@ -167,8 +174,23 @@ class MainActivity : ComponentActivity() {
     private fun isGranted(permission: String) =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
+    /** All stored device names, keyed by the device's 6-byte key-prefix hex. */
+    private fun loadDeviceNames(): Map<String, String> =
+        getPreferences(MODE_PRIVATE).all
+            .filterKeys { it.startsWith(PREF_NAME_PREFIX) }
+            .mapKeys { it.key.removePrefix(PREF_NAME_PREFIX) }
+            .mapValues { it.value.toString() }
+
+    private fun saveDeviceName(nameKey: String, name: String?) {
+        getPreferences(MODE_PRIVATE).edit().apply {
+            if (name == null) remove(PREF_NAME_PREFIX + nameKey)
+            else putString(PREF_NAME_PREFIX + nameKey, name)
+        }.apply()
+    }
+
     companion object {
         private const val PREF_KEY_FILTER = "own_adv_key_hex"
+        private const val PREF_NAME_PREFIX = "name:"
 
         fun requiredPermissions(): Array<String> =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
