@@ -13,6 +13,7 @@ no Mac and no public anisette server needed.
 from __future__ import annotations
 
 import getpass
+import os
 import sys
 from pathlib import Path
 
@@ -26,9 +27,23 @@ from findmy import (
 
 STORE_PATH = Path(__file__).with_name("account.json")
 ANISETTE_LIBS_PATH = Path(__file__).with_name("ani_libs.bin")
+ENV_PATH = Path(__file__).with_name(".env")
+
+
+def load_env(path: Path) -> None:
+    """Load KEY=VALUE pairs from a .env file into os.environ (no expansion)."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
 
 
 def main() -> int:
+    load_env(ENV_PATH)
     if STORE_PATH.exists():
         print(f"{STORE_PATH} exists already - delete it first to re-login.")
         return 1
@@ -36,8 +51,8 @@ def main() -> int:
     ani = LocalAnisetteProvider(libs_path=str(ANISETTE_LIBS_PATH))
     acc = AppleAccount(ani)
 
-    email = input("Apple-ID E-Mail: ")
-    password = getpass.getpass("Passwort: ")
+    email = os.environ.get("APPLE_ID_EMAIL") or input("Apple-ID E-Mail: ")
+    password = os.environ.get("APPLE_ID_PASSWORD") or getpass.getpass("Passwort: ")
 
     state = acc.login(email, password)
 
