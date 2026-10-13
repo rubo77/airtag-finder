@@ -18,3 +18,7 @@ backend/__pycache__/
 backend/last_report.json
 backend/.env
 /backend/.venv/
+
+# Runtime state/logs of the GSA probe and server
+backend/.last_ec
+backend/*.log

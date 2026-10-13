@@ -41,8 +41,15 @@ FindMyAccessory.from_plist("Beacon_XXXX.plist").to_json("airtag.json")
   `_explain_login_error` erweitern.
 - Account-Check: `appleid.apple.com` im Browser.
 
-## Produktions-Backend
+## Produktions-Backend (eclabs-vm10)
 
-Läuft aktuell unter `/root/workspace/airtag-backend/` auf dem Server
-(`uvicorn` via `nohup`, Port 8000, Log `server.log`). Überlebt keinen
-Reboot — für Dauerbetrieb systemd-Unit bauen (siehe dev/TODO.md).
+Läuft unter `/root/workspace/airtag-backend/` auf **eclabs-vm10**
+(`ssh eclabs-vm10`, root). Seit 2026-10-13 als systemd-Units:
+
+- `airtag-backend.service` — uvicorn `server:app`, Port 8000
+- `airtag-gsa-probe.service` — `gsa_probe.py` (probt GSA `init` alle 10 min,
+  ntfy-Push bei Statuswechsel; State in `.last_ec`, Logs im Journal)
+
+Verwaltung: `systemctl status airtag-backend airtag-gsa-probe`,
+`journalctl -u airtag-gsa-probe -f`. Beide `Restart=always` + enabled,
+überleben Reboots.
