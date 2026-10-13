@@ -12,6 +12,7 @@ no Mac and no public anisette server needed.
 
 from __future__ import annotations
 
+import getpass
 import sys
 from pathlib import Path
 
@@ -36,7 +37,7 @@ def main() -> int:
     acc = AppleAccount(ani)
 
     email = input("Apple-ID E-Mail: ")
-    password = input("Passwort: ")
+    password = getpass.getpass("Passwort: ")
 
     state = acc.login(email, password)
 
