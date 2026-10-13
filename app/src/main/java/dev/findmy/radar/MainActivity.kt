@@ -32,6 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dev.findmy.radar.ble.FindMyDevice
 import dev.findmy.radar.ble.FindMyScanner
+import dev.findmy.radar.ble.ScanController
 import dev.findmy.radar.crypto.AccessoryIdentity
 import dev.findmy.radar.util.IdLog
 import dev.findmy.radar.ui.DeviceListScreen
@@ -50,7 +51,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        scanner = FindMyScanner(this)
+        ScanController.init(this)
+        scanner = ScanController.scanner
 
         // Periodically drop devices that went silent so the list stays fresh.
         lifecycleScope.launch {
@@ -72,7 +74,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        scanner.stop()
+        if (!ScanController.backgroundScan) scanner.stop()
         super.onDestroy()
     }
 
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
     private fun AppContent(scanner: FindMyScanner) {
         var hasPermissions by remember { mutableStateOf(requiredPermissions().all(::isGranted)) }
         var bluetoothOn by remember { mutableStateOf(scanner.bluetoothEnabled) }
+        var backgroundScan by remember { mutableStateOf(ScanController.backgroundScan) }
         var target by remember { mutableStateOf<FindMyDevice?>(null) }
         var keyFilterHex by remember {
             mutableStateOf(getPreferences(MODE_PRIVATE).getString(PREF_KEY_FILTER, "") ?: "")
@@ -98,6 +101,9 @@ class MainActivity : ComponentActivity() {
         ) { grants ->
             hasPermissions = grants.values.all { it }
         }
+        val notifPermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { }
         val btEnableLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult(),
         ) {
@@ -216,6 +222,28 @@ class MainActivity : ComponentActivity() {
                         existingNames = effectiveNames.values.toSortedSet().toList(),
                         idLogSize = idLogSize,
                         accessories = accessories,
+                        backgroundScan = backgroundScan,
+                        onBackgroundScanChange = { on ->
+                            backgroundScan = on
+                            if (on) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    !isGranted(Manifest.permission.POST_NOTIFICATIONS)
+                                ) {
+                                    notifPermissionLauncher.launch(
+                                        Manifest.permission.POST_NOTIFICATIONS,
+                                    )
+                                }
+                                ContextCompat.startForegroundService(
+                                    this@MainActivity,
+                                    Intent(this@MainActivity, ScanService::class.java),
+                                )
+                            } else {
+                                startService(
+                                    Intent(this@MainActivity, ScanService::class.java)
+                                        .setAction(ScanService.ACTION_STOP),
+                                )
+                            }
+                        },
                         onImportAccessory = { json ->
                             runCatching { AccessoryIdentity.fromJson(JSONObject(json)) }
                                 .fold(

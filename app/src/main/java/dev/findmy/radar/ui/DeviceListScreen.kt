@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,6 +52,8 @@ fun DeviceListScreen(
     existingNames: List<String>,
     idLogSize: Int,
     accessories: List<AccessoryIdentity>,
+    backgroundScan: Boolean,
+    onBackgroundScanChange: (Boolean) -> Unit,
     onImportAccessory: (String) -> String?,
     onDeleteAccessory: (AccessoryIdentity) -> Unit,
     onKeyFilterChange: (String) -> Unit,
@@ -87,6 +90,14 @@ fun DeviceListScreen(
             style = MaterialTheme.typography.labelSmall,
             color = Color.Gray,
         )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Im Hintergrund weiter scannen",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = backgroundScan, onCheckedChange = onBackgroundScanChange)
+        }
 
         Spacer(Modifier.height(12.dp))
 
