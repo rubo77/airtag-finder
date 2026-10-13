@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.findmy.radar.ble.FindMyDevice
+import dev.findmy.radar.crypto.AccessoryIdentity
 import dev.findmy.radar.util.parseKeyBytes
 import java.util.Locale
 
@@ -49,6 +50,9 @@ fun DeviceListScreen(
     suggestions: Map<String, String>,
     existingNames: List<String>,
     idLogSize: Int,
+    accessories: List<AccessoryIdentity>,
+    onImportAccessory: (String) -> String?,
+    onDeleteAccessory: (AccessoryIdentity) -> Unit,
     onKeyFilterChange: (String) -> Unit,
     onRenameDevice: (FindMyDevice, String?) -> Unit,
     onRequestPermissions: () -> Unit,
@@ -57,12 +61,22 @@ fun DeviceListScreen(
     onPickTarget: (FindMyDevice) -> Unit,
 ) {
     var renaming by remember { mutableStateOf<FindMyDevice?>(null) }
+    var managingTags by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Text("AirTag Finder", style = MaterialTheme.typography.headlineMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "AirTag Finder",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { managingTags = true }) {
+                Text("Eigene Tags (${accessories.size})")
+            }
+        }
         Text(
             if (isScanning) "Scanne nach FindMy-Geräten…" else "Scanner gestoppt",
             style = MaterialTheme.typography.bodyMedium,
@@ -143,6 +157,73 @@ fun DeviceListScreen(
             },
         )
     }
+
+    if (managingTags) {
+        AccessoryDialog(
+            accessories = accessories,
+            onImport = onImportAccessory,
+            onDelete = onDeleteAccessory,
+            onDismiss = { managingTags = false },
+        )
+    }
+}
+
+@Composable
+private fun AccessoryDialog(
+    accessories: List<AccessoryIdentity>,
+    onImport: (String) -> String?,
+    onDelete: (AccessoryIdentity) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var json by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Eigene Tags") },
+        text = {
+            Column {
+                Text(
+                    "FindMyAccessory-JSON (aus backend/tags/) importieren. Danach wird " +
+                        "der Tag über jede Schlüsselrotation hinweg erkannt.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+                Spacer(Modifier.height(8.dp))
+                accessories.forEach { acc ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            acc.displayName + (acc.identifier?.let { " · $it" } ?: ""),
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { onDelete(acc) }) { Text("Löschen") }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = json,
+                    onValueChange = { json = it; error = null },
+                    label = { Text("Accessory-JSON einfügen") },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let {
+                    Text(it, color = Color(0xFFFF8A65), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    error = onImport(json)
+                    if (error == null) json = ""
+                },
+                enabled = json.isNotBlank(),
+            ) { Text("Importieren") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Schließen") }
+        },
+    )
 }
 
 @Composable
