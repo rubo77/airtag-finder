@@ -10,9 +10,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,6 +33,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.findmy.radar.ble.FindMyDevice
 import dev.findmy.radar.ble.FindMyScanner
 import dev.findmy.radar.ui.DeviceListScreen
+import dev.findmy.radar.ui.MapScreen
 import dev.findmy.radar.ui.RadarScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -97,29 +108,59 @@ class MainActivity : ComponentActivity() {
             devices[t.mac] ?: devices.values.firstOrNull { it.matchesAdvKey(t.advKeyBytes) }
         }
 
-        if (target != null) {
-            RadarScreen(
-                device = liveTarget,
-                onBack = { target = null },
-            )
-        } else {
-            DeviceListScreen(
-                devices = devices.values.sortedByDescending { it.rssi },
-                isScanning = isScanning,
-                hasPermissions = hasPermissions,
-                bluetoothOn = bluetoothOn,
-                keyFilterHex = keyFilterHex,
-                onKeyFilterChange = { hex ->
-                    keyFilterHex = hex
-                    getPreferences(MODE_PRIVATE).edit().putString(PREF_KEY_FILTER, hex).apply()
-                },
-                onRequestPermissions = { permissionLauncher.launch(requiredPermissions()) },
-                onEnableBluetooth = {
-                    btEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-                },
-                onRefreshBluetooth = { bluetoothOn = scanner.bluetoothEnabled },
-                onPickTarget = { target = it },
-            )
+        var tab by remember { mutableStateOf(0) }
+
+        Scaffold(
+            bottomBar = {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = tab == 0,
+                        onClick = { tab = 0 },
+                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        label = { Text("Scanner") },
+                    )
+                    NavigationBarItem(
+                        selected = tab == 1,
+                        onClick = { tab = 1 },
+                        icon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                        label = { Text("Karte") },
+                    )
+                }
+            },
+        ) { innerPadding ->
+            Box(Modifier.padding(innerPadding)) {
+                if (target != null) {
+                    RadarScreen(
+                        device = liveTarget,
+                        onBack = { target = null },
+                    )
+                } else if (tab == 1) {
+                    MapScreen()
+                } else {
+                    DeviceListScreen(
+                        devices = devices.values.sortedByDescending { it.rssi },
+                        isScanning = isScanning,
+                        hasPermissions = hasPermissions,
+                        bluetoothOn = bluetoothOn,
+                        keyFilterHex = keyFilterHex,
+                        onKeyFilterChange = { hex ->
+                            keyFilterHex = hex
+                            getPreferences(MODE_PRIVATE).edit()
+                                .putString(PREF_KEY_FILTER, hex).apply()
+                        },
+                        onRequestPermissions = {
+                            permissionLauncher.launch(requiredPermissions())
+                        },
+                        onEnableBluetooth = {
+                            btEnableLauncher.launch(
+                                Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+                            )
+                        },
+                        onRefreshBluetooth = { bluetoothOn = scanner.bluetoothEnabled },
+                        onPickTarget = { target = it },
+                    )
+                }
+            }
         }
     }
 

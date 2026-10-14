@@ -10,6 +10,7 @@ Die App scannt BLE-Advertisements vom Typ *Offline Finding* (Apple Company-ID `0
 - **Radar**: große Entfernungsanzeige, Sweep-Animation, Pieptöne die schneller werden je näher du kommst, Vibration unter ~1 m
 - **Eigen-Filter**: `adv_key_b64` deines AirTags (z. B. aus [FindMy.py](https://github.com/malmeloo/FindMy.py)) eintragen → dein Gerät wird markiert und die Liste gefiltert
 - **Zustände**: unterscheidet *separated* (voller 28-Byte-Key wird gesendet) und *nearby* (nur 6 Key-Bytes)
+- **Karten-Tab**: zeigt die letzte bekannte Position aus Apples Find-My-Netzwerk auf einer OpenStreetMap-Karte — via dem mitgelieferten [`backend/`](backend/) (FindMy.py + FastAPI)
 - **Permissions** korrekt je Android-Version: „Geräte in der Nähe" ab Android 12, Standort-Berechtigung auf älteren Versionen
 
 ## Download
@@ -42,11 +43,26 @@ AirTags senden alle ~2 Sekunden BLE-Advertisements im Apple-Offline-Finding-Form
 
 Der Decoder (`FindMyDevice.parse`) ist aus [FindMy.py](https://github.com/malmeloo/FindMy.py) portiert. Die Entfernung wird aus dem RSSI über ein Log-Distance-Path-Loss-Modell geschätzt (`d = 10^((txPower - rssi) / 25)`).
 
+## Remote-Ortung (Find-My-Netzwerk)
+
+Für die Position außerhalb der Bluetooth-Reichweite dient das [`backend/`](backend/):
+FindMy.py fragt Apples Server ab (Apple-Login + AirTag-Privatschlüssel nötig,
+Anisette wird lokal erzeugt — kein Mac erforderlich), die App fragt das Backend
+alle 60 s ab und pinnt die Positionen auf die Karte.
+
+```bash
+cd backend && pip install -r requirements.txt
+python login.py          # einmalig: Apple-ID + 2FA
+cp dein_airtag.json tags/
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
 ## Einschränkungen
 
-- **Nur Bluetooth-Reichweite** (~10–50 m). Die Ortung über Apples Find-My-Server ist nicht implementiert — dafür braucht es die AirTag-Privatschlüssel + Apple-Login, was FindMy.py am PC leistet.
+- **BLE-Radar**: nur Bluetooth-Reichweite (~10–50 m); Entfernung ist eine grobe RSSI-Schätzung.
 - Der Advertisement-Key **rotiert ca. alle 15 Minuten** — danach muss das Ziel ggf. neu angepeilt werden.
-- Die Entfernungsanzeige ist eine grobe Schätzung; Wände und Ausrichtung verfälschen RSSI.
+- **Karte**: zeigt nur Reports, die andere Apple-Geräte hochgeladen haben — kein Live-Tracking.
+- Das Backend hat keine Auth — nur im eigenen LAN/VPN betreiben.
 
 ## Credits
 
