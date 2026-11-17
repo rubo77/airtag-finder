@@ -23,3 +23,4 @@ identity and whatever other cool features we added.
 
 Create a separate branch for each feature so they can be submitted as
 individual MRs.
+26-11-17 00:20 - "I dont know what to do with the ntfy messages, where are they triggered on the server?" + "done - airtag-gsa-probe.service is stopped and disabled"

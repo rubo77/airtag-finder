@@ -48,8 +48,12 @@ Läuft unter `/root/workspace/airtag-backend/` auf **eclabs-vm10**
 
 - `airtag-backend.service` — uvicorn `server:app`, Port 8000
 - `airtag-gsa-probe.service` — `gsa_probe.py` (probt GSA `init` alle 10 min,
-  ntfy-Push bei Statuswechsel; State in `.last_ec`, Logs im Journal)
+  ntfy-Push bei Statuswechsel; State in `.last_ec`, Logs im Journal).
+  **Stopped + disabled 2026-11-17**: Apple's `-80045` wave was over and the ec
+  code flapped between `-20209`/`-20970`, pushing an ntfy on every flip. Re-enable
+  (`systemctl enable --now airtag-gsa-probe`) only if a rejection window needs
+  watching again — and consider requiring a few identical results before pushing.
 
 Verwaltung: `systemctl status airtag-backend airtag-gsa-probe`,
-`journalctl -u airtag-gsa-probe -f`. Beide `Restart=always` + enabled,
-überleben Reboots.
+`journalctl -u airtag-gsa-probe -f`. `airtag-backend` bleibt
+`Restart=always` + enabled, überlebt Reboots.
