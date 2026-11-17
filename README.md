@@ -1,20 +1,20 @@
 # AirTag Finder
 
-![Status](https://img.shields.io/badge/Status-blocked-red)
+![Status](https://img.shields.io/badge/Status-archiviert-lightgrey)
 ![Plattform](https://img.shields.io/badge/Android-8.0%2B-green)
 ![Backend](https://img.shields.io/badge/Backend-FastAPI%20%2B%20FindMy.py-blue)
 
-> [!WARNING]
-> 🔴 **Remote-Ortung aktuell blockiert** (Stand: Oktober 2026): Apple lehnt
-> den GSA-Login derzeit mit `ec=-80045` ab (Anisette-/Risk-Engine) — das
-> Backend kann deshalb keine Positions-Reports aus dem Find-My-Netzwerk
-> abrufen. Derselbe Fehler betrifft aktuell auch andere Projekte, z. B.
-> [OpenTagViewer](https://github.com/parawanderer/OpenTagViewer).
-> Ein Watcher ([`backend/gsa_probe.py`](backend/gsa_probe.py)) testet alle
-> 10 Minuten, ob Apple den Login wieder durchlässt.
-> **Alle BLE-Funktionen (Geräteliste, Radar, Benennung, Rolling-Key-Erkennung,
-> Hintergrund-Scan) funktionieren uneingeschränkt — komplett lokal, ohne
-> Apple-Account.**
+> [!CAUTION]
+> ⚠️ **Dieses Projekt wird nicht weitergeführt** (Stand: November 2026).
+> Die Idee geht stattdessen in [OpenTagViewer](https://github.com/parawanderer/OpenTagViewer)
+> auf — dort läuft FindMy.py via Chaquopy direkt auf dem Gerät, es braucht
+> **kein eigenes Backend und keinen Server** mehr. Unsere Beiträge dazu
+> liegen auf dem Fork [rubo77/OpenTagViewer](https://github.com/rubo77/OpenTagViewer)
+> (Branch `dev/nearby-features` und dessen Feature-Branches).
+>
+> Dieses Repo bleibt als Referenz stehen — insbesondere die
+> Rolling-Key-Krypto (`crypto/`) und der Offline-Finding-Decoder —, das
+> Backend auf unserem Server ist abgeschaltet.
 
 Android-App zum Finden von AirTags und anderen Apple-FindMy-Geräten in
 Bluetooth-Reichweite — plus optionale Remote-Ortung über Apples
@@ -51,7 +51,7 @@ an — mit Entfernungsschätzung und einem Radar-Modus zum Anpeilen.
 | Was | Funktioniert? | |
 | --- | --- | --- |
 | **AirTag** (BLE: Liste, Radar, Benennung) | ✅ | sofort, ohne Account/Backend |
-| **AirTag** (Remote-Ortung über Find My) | ⛔ | aktuell durch Apple blockiert (`ec=-80045`, siehe oben) |
+| **AirTag** (Remote-Ortung über Find My) | ⛔ | eingestellt — läuft in OpenTagViewer weiter |
 | **Drittanbieter-Tracker mit Apple Find My** (Chipolo, Pebblebee, eufy, MiTag …) | ✅ | gleiches Advertisement-Format |
 | **AirPods, iPhones, andere FindMy-Geräte** | ✅ | BLE-Sichtung (nearby/separated) |
 | **Custom Tags** ([OpenHaystack](https://github.com/seemoo-lab/openhaystack)/[Macless Haystack](https://github.com/dchristl/macless-haystack)) | ✅ | eigene Keys bekannt → JSON-Import direkt möglich |
@@ -78,7 +78,7 @@ Optional für permanente Tag-Erkennung: `FindMyAccessory`-JSON des eigenen
 Tags importieren (Dialog „Eigene Tags") — die App leitet daraus alle
 rotierten Werbe-Keys selbst ab.
 
-### Remote-Ortung (sobald der Apple-Login wieder durchlässt)
+### Remote-Ortung (historisch — Backend abgeschaltet)
 
 1. Ein **Android-Phone** mit installierter App
 2. Ein **Apple-Account** mit 2FA (SMS oder Trusted Device)
@@ -121,19 +121,13 @@ leitet `crypto/RollingKey.kt` per X9.63-KDF und P-224-Skalararithmetik
 und Zuordnung gehen nie wieder verloren. Für fremde Tags greift weiterhin
 die Zeit-/RSSI-Heuristik.
 
-## Aktueller Blocker: Apple GSA `ec=-80045`
+## Historischer Blocker: Apple GSA `ec=-80045`
 
-- **Symptom**: `backend/login.py` (bzw. jede GSA-Abfrage) wird von Apple mit
-  `ec=-80045` abgelehnt — die Risk-Engine akzeptiert den Anisette-Kontext
-  nicht. Kein Credential-Problem.
-- **Monitoring**: `backend/gsa_probe.py` läuft als systemd-Service alle
-  600 s und prüft, ob der Fehlercode sich ändert (Status in `.last_ec`,
-  Log `gsa_probe.log`).
-- **Sobald Apple wieder durchlässt**: `python login.py` + 2FA →
-  `account.json` + `ani_libs.bin` ins Backend-Verzeichnis →
-  `systemctl restart airtag-backend` — fertig.
-- **Betroffen**: alle Projekte, die GSA-Server-seitig anmelden — u. a.
-  FindMy.py-Nutzer und OpenTagViewer.
+Dieses Projekt litt zeitweise an Apples `ec=-80045`-Ablehnungswelle, die
+GSA-Logins von Nicht-Apple-Anisettes blockierte. Der Watcher
+`backend/gsa_probe.py` überwachte den Fehlercode, wurde abgeschaltet, als
+die Welle vorbei war. Das Problem wird in OpenTagViewer weiterverfolgt
+(u. a. `parawanderer/OpenTagViewer#248`).
 
 ## Einschränkungen
 
